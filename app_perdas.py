@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 
 # Configuração da página
 st.set_page_config(page_title="Calculadora de Perdas", page_icon="⚡", layout="centered")
@@ -17,12 +18,74 @@ codigos_positivos = {
 }
 
 todos_codigos = {**codigos_negativos, **codigos_positivos}
-# Adicionando a opção LIDO com valor 0 para não interferir nas somas, mas servir de histórico
+# Adicionando a opção LIDO com valor 0
 todos_codigos["LIDO"] = 0 
 
 lista_codigos = ["Selecione..."] + sorted(list(todos_codigos.keys()))
 
 st.title("⚡ Diagnóstico de Perdas em kWh")
+st.divider()
+
+# --- INÍCIO DA NOVA MELHORIA: PESQUISA DE INSTALAÇÃO ---
+st.subheader("🔍 Consulta de Perda Prevista")
+st.markdown("Digite o número da instalação para verificar a perda prevista na base deste mês.")
+
+# Função para carregar a base de dados
+@st.cache_data
+def carregar_dados():
+    try:
+        # Tenta ler o arquivo (ajuste o nome se for necessário, ex: .csv)
+        df = pd.read_excel('base_perdas.xlsx')
+        
+        # Converte a coluna INSTALACAO para texto, removendo '.0' se houver
+        if 'INSTALACAO' in df.columns:
+            df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True)
+            
+        return df
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        st.error(f"Erro ao ler a planilha: {e}")
+        return None
+
+df_base = carregar_dados()
+
+instalacao_input = st.text_input("Número da Instalação (Ex: 36218):")
+
+if instalacao_input:
+    if df_base is not None:
+        # Verifica se as colunas necessárias existem para evitar erros
+        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREV_MENSAL']
+        if all(col in df_base.columns for col in colunas_necessarias):
+            
+            # Limpa espaços em branco que possam vir da planilha
+            df_base['STATUS_PERDA'] = df_base['STATUS_PERDA'].astype(str).str.strip().str.upper()
+            
+            # Filtra pela instalação digitada E pelo STATUS_PERDA == 'COM PERDA' ou 'COMPERDA'
+            # (Adicionei as duas opções pois no Excel da imagem diz "COM PERDA" e na sua mensagem diz "COMPERDA")
+            resultado = df_base[
+                (df_base['INSTALACAO'] == instalacao_input) & 
+                (df_base['STATUS_PERDA'].isin(['COM PERDA', 'COMPERDA']))
+            ]
+            
+            if not resultado.empty:
+                # Pega o valor da coluna PERDA_PREV_MENSAL
+                perda = resultado['PERDA_PREV_MENSAL'].values[0]
+                st.success(f"⚠️ A instalação **{instalacao_input}** possui o status COM PERDA e uma previsão de **{perda} kW**.")
+            else:
+                # Se achou a instalação mas ela NÃO tem perda
+                tem_instalacao = df_base[df_base['INSTALACAO'] == instalacao_input]
+                if not tem_instalacao.empty:
+                    st.info(f"✅ A instalação **{instalacao_input}** foi encontrada, mas NÃO possui status de 'COM PERDA' ativo.")
+                else:
+                    st.warning(f"A instalação **{instalacao_input}** não foi encontrada na base de dados.")
+        else:
+             st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREV_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
+    else:
+        st.error("⚠️ Arquivo 'base_perdas.xlsx' não encontrado no repositório. Faça o upload da planilha no GitHub.")
+
+st.divider()
+# --- FIM DA NOVA MELHORIA ---
 
 # 1. Seleção do Status do Cliente
 st.subheader("1️⃣ Status Atual do Cliente")
