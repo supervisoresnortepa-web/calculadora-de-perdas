@@ -18,7 +18,7 @@ codigos_positivos = {
 }
 
 todos_codigos = {**codigos_negativos, **codigos_positivos}
-# Adicionando a opção LIDO com valor 0
+# Adicionando a opção LIDO com valor 0 para não interferir nas somas
 todos_codigos["LIDO"] = 0 
 
 lista_codigos = ["Selecione..."] + sorted(list(todos_codigos.keys()))
@@ -34,9 +34,10 @@ st.markdown("Digite o número da instalação para verificar a perda prevista na
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_excel('base_perdas.xlsx')
+        # ATUALIZADO: Adicionado engine='openpyxl' para forçar a leitura correta do Excel
+        df = pd.read_excel('base_perdas.xlsx', engine='openpyxl')
         
-        # Converte a coluna INSTALACAO para texto, remove '.0' e IGNORA ZEROS À ESQUERDA
+        # Converte a coluna INSTALACAO para texto, remove '.0' se houver e IGNORA ZEROS À ESQUERDA
         if 'INSTALACAO' in df.columns:
             df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
             
@@ -56,22 +57,21 @@ if instalacao_input:
     instalacao_input_limpo = instalacao_input.lstrip('0')
 
     if df_base is not None:
-        # ATUALIZADO: Nome da coluna alterado para PERDA_PREVISTA_MENSAL
+        # Verifica se as colunas necessárias existem
         colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL']
-        
         if all(col in df_base.columns for col in colunas_necessarias):
             
             # Limpa espaços em branco que possam vir da planilha
             df_base['STATUS_PERDA'] = df_base['STATUS_PERDA'].astype(str).str.strip().str.upper()
             
-            # Filtra pela instalação digitada E pelo STATUS_PERDA
+            # Filtra pela instalação digitada E pelo STATUS_PERDA == 'COM PERDA' ou 'COMPERDA'
             resultado = df_base[
                 (df_base['INSTALACAO'] == instalacao_input_limpo) & 
                 (df_base['STATUS_PERDA'].isin(['COM PERDA', 'COMPERDA']))
             ]
             
             if not resultado.empty:
-                # ATUALIZADO: Pega o valor da nova coluna
+                # Pega o valor da coluna PERDA_PREVISTA_MENSAL
                 perda = resultado['PERDA_PREVISTA_MENSAL'].values[0]
                 st.success(f"⚠️ A instalação **{instalacao_input_limpo}** possui o status COM PERDA e uma previsão de **{perda} kW**.")
             else:
@@ -82,7 +82,7 @@ if instalacao_input:
                 else:
                     st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
-             st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREVISTA_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
+            st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREVISTA_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
     else:
         st.error("⚠️ Arquivo 'base_perdas.xlsx' não encontrado no repositório. Faça o upload da planilha no GitHub.")
 
@@ -130,14 +130,17 @@ if st.button("Gerar Diagnóstico", type="primary"):
         
         # LOGICA DE NEGOCIO
         if status_cliente == "Cortado (CR)":
+            # Regra de Exceção para CR: Histórico de LIDO e apontamento de Mínimo (ex: D01)
             if (resp_m1 == "LIDO" or resp_m2 == "LIDO") and resp_atual == "D01":
                 st.error("🚨 **DIAGNÓSTICO: COM PERDA (EXCEÇÃO DE FATURAMENTO)**")
                 st.info("Motivo: Embora o cliente esteja CR, ele possui um histórico recente de LIDO e o apontamento atual (D01) aciona a regra de faturamento pelo MÍNIMO.")
             else:
+                # Regra Geral CR
                 st.success("✅ **DIAGNÓSTICO: SEM PERDA**")
                 st.info("Motivo: Clientes com status CR (Cortado) não geram perda em kWh, independentemente de a soma ser positiva ou negativa.")
                 
         else:
+            # Lógica para LG ou Religado (CR -> LG)
             if soma > 0:
                 st.error("🚨 **DIAGNÓSTICO: COM PERDA**")
                 if status_cliente == "Religado (Saiu de CR para LG no mês atual)":
