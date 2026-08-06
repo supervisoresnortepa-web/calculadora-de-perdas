@@ -27,14 +27,13 @@ st.title("⚡ Diagnóstico de Perdas em kWh")
 st.divider()
 
 # --- INÍCIO DA NOVA MELHORIA: PESQUISA DE INSTALAÇÃO ---
-st.subheader("🔍 Consulta de Perda Prevista")
-st.markdown("Digite o número da instalação para verificar a perda prevista na base deste mês.")
+st.subheader("🔍 Consulta de Perda na Base")
+st.markdown("Digite o número da instalação para verificar as perdas na base deste mês.")
 
 # Função para carregar a base de dados
 @st.cache_data
 def carregar_dados():
     try:
-        # ATUALIZADO: Adicionado engine='openpyxl' para forçar a leitura correta do Excel
         df = pd.read_excel('base_perdas.xlsx', engine='openpyxl')
         
         # Converte a coluna INSTALACAO para texto, remove '.0' se houver e IGNORA ZEROS À ESQUERDA
@@ -53,36 +52,37 @@ df_base = carregar_dados()
 instalacao_input = st.text_input("Número da Instalação (Ex: 36218):")
 
 if instalacao_input:
-    # Remove também os zeros à esquerda do que o usuário digitar na caixinha, por segurança
+    # Remove zeros à esquerda por segurança
     instalacao_input_limpo = instalacao_input.lstrip('0')
 
     if df_base is not None:
-        # Verifica se as colunas necessárias existem
-        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL']
+        # ATUALIZADO: Inclusão da nova coluna "PERDA DEFINITIVA"
+        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL', 'PERDA DEFINITIVA']
+        
         if all(col in df_base.columns for col in colunas_necessarias):
             
             # Limpa espaços em branco que possam vir da planilha
             df_base['STATUS_PERDA'] = df_base['STATUS_PERDA'].astype(str).str.strip().str.upper()
             
-            # Filtra pela instalação digitada E pelo STATUS_PERDA == 'COM PERDA' ou 'COMPERDA'
-            resultado = df_base[
-                (df_base['INSTALACAO'] == instalacao_input_limpo) & 
-                (df_base['STATUS_PERDA'].isin(['COM PERDA', 'COMPERDA']))
-            ]
+            # ATUALIZADO: Busca a instalação INDEPENDENTE do status
+            resultado = df_base[df_base['INSTALACAO'] == instalacao_input_limpo]
             
             if not resultado.empty:
-                # Pega o valor da coluna PERDA_PREVISTA_MENSAL
-                perda = resultado['PERDA_PREVISTA_MENSAL'].values[0]
-                st.success(f"⚠️ A instalação **{instalacao_input_limpo}** possui o status COM PERDA e uma previsão de **{perda} kW**.")
-            else:
-                # Se achou a instalação mas ela NÃO tem perda
-                tem_instalacao = df_base[df_base['INSTALACAO'] == instalacao_input_limpo]
-                if not tem_instalacao.empty:
-                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada, mas NÃO possui status de 'COM PERDA' ativo.")
+                # Extrai os valores das 3 colunas
+                status = resultado['STATUS_PERDA'].values[0]
+                perda_prevista = resultado['PERDA_PREVISTA_MENSAL'].values[0]
+                perda_definitiva = resultado['PERDA DEFINITIVA'].values[0]
+                
+                # Se for "Com Perda", exibe a caixa em vermelho (alerta)
+                if status in ['COM PERDA', 'COMPERDA']:
+                    st.error(f"⚠️ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.")
+                # Se for qualquer outro status ("Sem Perda", etc), exibe a caixa em azul (informativo)
                 else:
-                    st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
+                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.")
+            else:
+                st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
-            st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREVISTA_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
+             st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL' e/ou 'PERDA DEFINITIVA' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
     else:
         st.error("⚠️ Arquivo 'base_perdas.xlsx' não encontrado no repositório. Faça o upload da planilha no GitHub.")
 
