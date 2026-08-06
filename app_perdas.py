@@ -34,12 +34,11 @@ st.markdown("Digite o número da instalação para verificar a perda prevista na
 @st.cache_data
 def carregar_dados():
     try:
-        # Tenta ler o arquivo (ajuste o nome se for necessário, ex: .csv)
         df = pd.read_excel('base_perdas.xlsx')
         
-        # Converte a coluna INSTALACAO para texto, removendo '.0' se houver
+        # Converte a coluna INSTALACAO para texto, remove '.0' e IGNORA ZEROS À ESQUERDA
         if 'INSTALACAO' in df.columns:
-            df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True)
+            df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
             
         return df
     except FileNotFoundError:
@@ -53,34 +52,37 @@ df_base = carregar_dados()
 instalacao_input = st.text_input("Número da Instalação (Ex: 36218):")
 
 if instalacao_input:
+    # Remove também os zeros à esquerda do que o usuário digitar na caixinha, por segurança
+    instalacao_input_limpo = instalacao_input.lstrip('0')
+
     if df_base is not None:
-        # Verifica se as colunas necessárias existem para evitar erros
-        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREV_MENSAL']
+        # ATUALIZADO: Nome da coluna alterado para PERDA_PREVISTA_MENSAL
+        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL']
+        
         if all(col in df_base.columns for col in colunas_necessarias):
             
             # Limpa espaços em branco que possam vir da planilha
             df_base['STATUS_PERDA'] = df_base['STATUS_PERDA'].astype(str).str.strip().str.upper()
             
-            # Filtra pela instalação digitada E pelo STATUS_PERDA == 'COM PERDA' ou 'COMPERDA'
-            # (Adicionei as duas opções pois no Excel da imagem diz "COM PERDA" e na sua mensagem diz "COMPERDA")
+            # Filtra pela instalação digitada E pelo STATUS_PERDA
             resultado = df_base[
-                (df_base['INSTALACAO'] == instalacao_input) & 
+                (df_base['INSTALACAO'] == instalacao_input_limpo) & 
                 (df_base['STATUS_PERDA'].isin(['COM PERDA', 'COMPERDA']))
             ]
             
             if not resultado.empty:
-                # Pega o valor da coluna PERDA_PREV_MENSAL
-                perda = resultado['PERDA_PREV_MENSAL'].values[0]
-                st.success(f"⚠️ A instalação **{instalacao_input}** possui o status COM PERDA e uma previsão de **{perda} kW**.")
+                # ATUALIZADO: Pega o valor da nova coluna
+                perda = resultado['PERDA_PREVISTA_MENSAL'].values[0]
+                st.success(f"⚠️ A instalação **{instalacao_input_limpo}** possui o status COM PERDA e uma previsão de **{perda} kW**.")
             else:
                 # Se achou a instalação mas ela NÃO tem perda
-                tem_instalacao = df_base[df_base['INSTALACAO'] == instalacao_input]
+                tem_instalacao = df_base[df_base['INSTALACAO'] == instalacao_input_limpo]
                 if not tem_instalacao.empty:
-                    st.info(f"✅ A instalação **{instalacao_input}** foi encontrada, mas NÃO possui status de 'COM PERDA' ativo.")
+                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada, mas NÃO possui status de 'COM PERDA' ativo.")
                 else:
-                    st.warning(f"A instalação **{instalacao_input}** não foi encontrada na base de dados.")
+                    st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
-             st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREV_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
+             st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA' e/ou 'PERDA_PREVISTA_MENSAL' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
     else:
         st.error("⚠️ Arquivo 'base_perdas.xlsx' não encontrado no repositório. Faça o upload da planilha no GitHub.")
 
@@ -128,17 +130,14 @@ if st.button("Gerar Diagnóstico", type="primary"):
         
         # LOGICA DE NEGOCIO
         if status_cliente == "Cortado (CR)":
-            # Regra de Exceção para CR: Histórico de LIDO e apontamento de Mínimo (ex: D01)
             if (resp_m1 == "LIDO" or resp_m2 == "LIDO") and resp_atual == "D01":
                 st.error("🚨 **DIAGNÓSTICO: COM PERDA (EXCEÇÃO DE FATURAMENTO)**")
                 st.info("Motivo: Embora o cliente esteja CR, ele possui um histórico recente de LIDO e o apontamento atual (D01) aciona a regra de faturamento pelo MÍNIMO.")
             else:
-                # Regra Geral CR
                 st.success("✅ **DIAGNÓSTICO: SEM PERDA**")
                 st.info("Motivo: Clientes com status CR (Cortado) não geram perda em kWh, independentemente de a soma ser positiva ou negativa.")
                 
         else:
-            # Lógica para LG ou Religado (CR -> LG)
             if soma > 0:
                 st.error("🚨 **DIAGNÓSTICO: COM PERDA**")
                 if status_cliente == "Religado (Saiu de CR para LG no mês atual)":
