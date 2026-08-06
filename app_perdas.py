@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import os
 
 # Configuração da página
 st.set_page_config(page_title="Calculadora de Perdas", page_icon="⚡", layout="centered")
@@ -30,22 +31,42 @@ st.divider()
 st.subheader("🔍 Consulta de Perda na Base")
 st.markdown("Digite o número da instalação para verificar as perdas na base deste mês.")
 
-# Função para carregar a base de dados
+# Função blindada para carregar a base de dados (Lê XLSX ou CSV)
 @st.cache_data
 def carregar_dados():
-    try:
-        df = pd.read_excel('base_perdas.xlsx', engine='openpyxl')
-        
-        # Converte a coluna INSTALACAO para texto, remove '.0' se houver e IGNORA ZEROS À ESQUERDA
-        if 'INSTALACAO' in df.columns:
-            df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
+    # 1. Tenta ler o arquivo Excel primeiro
+    if os.path.exists('base_perdas.xlsx'):
+        try:
+            df = pd.read_excel('base_perdas.xlsx', engine='openpyxl')
+            if 'INSTALACAO' in df.columns:
+                df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
+            return df
+        except Exception:
+            st.error("🚨 O arquivo 'base_perdas.xlsx' está corrompido (Erro: File is not a zip file).")
+            st.info("💡 Solução recomendada: Salve a sua planilha no Excel como formato **CSV (Separado por vírgulas)** e faça o upload dela no GitHub como 'base_perdas.csv'.")
+            return "ERRO"
             
-        return df
-    except FileNotFoundError:
-        return None
-    except Exception as e:
-        st.error(f"Erro ao ler a planilha: {e}")
-        return None
+    # 2. Alternativa segura: Tenta ler o arquivo CSV (Imune ao erro de zip)
+    elif os.path.exists('base_perdas.csv'):
+        try:
+            # Tenta ler no padrão brasileiro (separador ponto e vírgula)
+            df = pd.read_csv('base_perdas.csv', sep=';', encoding='latin1')
+            if 'INSTALACAO' in df.columns:
+                df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
+            return df
+        except Exception:
+            try:
+                # Tenta ler no padrão internacional (separador vírgula)
+                df = pd.read_csv('base_perdas.csv', sep=',', encoding='utf-8')
+                if 'INSTALACAO' in df.columns:
+                    df['INSTALACAO'] = df['INSTALACAO'].astype(str).str.replace(r'\.0$', '', regex=True).str.lstrip('0')
+                return df
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo CSV: {e}")
+                return "ERRO"
+                
+    # Se nenhum arquivo for encontrado
+    return None
 
 df_base = carregar_dados()
 
@@ -55,16 +76,17 @@ if instalacao_input:
     # Remove zeros à esquerda por segurança
     instalacao_input_limpo = instalacao_input.lstrip('0')
 
-    if df_base is not None:
-        # ATUALIZADO: Inclusão da nova coluna "PERDA DEFINITIVA"
+    # Verifica se a base carregou corretamente (Se for DataFrame)
+    if isinstance(df_base, pd.DataFrame):
         colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL', 'PERDA DEFINITIVA']
         
+        # Verifica se todas as colunas existem
         if all(col in df_base.columns for col in colunas_necessarias):
             
             # Limpa espaços em branco que possam vir da planilha
             df_base['STATUS_PERDA'] = df_base['STATUS_PERDA'].astype(str).str.strip().str.upper()
             
-            # ATUALIZADO: Busca a instalação INDEPENDENTE do status
+            # Busca a instalação INDEPENDENTE do status
             resultado = df_base[df_base['INSTALACAO'] == instalacao_input_limpo]
             
             if not resultado.empty:
@@ -83,8 +105,14 @@ if instalacao_input:
                 st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
              st.error("⚠️ As colunas 'INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL' e/ou 'PERDA DEFINITIVA' não foram encontradas na planilha. Verifique os nomes dos cabeçalhos.")
+    
+    # Se a função retornou erro de leitura
+    elif df_base == "ERRO":
+        pass # O erro já foi exibido na tela pela função carregar_dados()
+        
+    # Se não encontrou nenhum arquivo
     else:
-        st.error("⚠️ Arquivo 'base_perdas.xlsx' não encontrado no repositório. Faça o upload da planilha no GitHub.")
+        st.error("⚠️ Arquivo da base de dados não encontrado. Faça o upload da sua planilha no GitHub (recomendado usar 'base_perdas.csv').")
 
 st.divider()
 # --- FIM DA NOVA MELHORIA ---
