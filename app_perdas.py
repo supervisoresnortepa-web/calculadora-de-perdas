@@ -99,10 +99,11 @@ if instalacao_input:
                 
                 # Se for "Com Perda", exibe a caixa em vermelho (alerta)
                 if status in ['COM PERDA', 'COMPERDA']:
-                    st.error(f"⚠️ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**. Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
+                    st.error(f"⚠️ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.\n Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
+                        
                 # Se for qualquer outro status ("Sem Perda", etc), exibe a caixa em azul (informativo)
                 else:
-                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**. Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
+                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.\n Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
             else:
                 st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
