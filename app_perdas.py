@@ -78,8 +78,7 @@ if instalacao_input:
 
     # Verifica se a base carregou corretamente (Se for DataFrame)
     if isinstance(df_base, pd.DataFrame):
-        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL', 'PERDA DEFINITIVA']
-        
+        colunas_necessarias = ['INSTALACAO', 'STATUS_PERDA', 'PERDA_PREVISTA_MENSAL', 'PERDA DEFINITIVA', 'APONTAMENTO', 'REFERENCIA', 'UNIDADE_LEITURA']        
         # Verifica se todas as colunas existem
         if all(col in df_base.columns for col in colunas_necessarias):
             
@@ -94,13 +93,16 @@ if instalacao_input:
                 status = resultado['STATUS_PERDA'].values[0]
                 perda_prevista = resultado['PERDA_PREVISTA_MENSAL'].values[0]
                 perda_definitiva = resultado['PERDA DEFINITIVA'].values[0]
+                apontamento = resultado['APONTAMENTO'].values[0]
+                referencia = resultado['REFERENCIA'].values[0]
+                unidade_leitura = resultado['UNIDADE_LEITURA'].values[0]
                 
                 # Se for "Com Perda", exibe a caixa em vermelho (alerta)
                 if status in ['COM PERDA', 'COMPERDA']:
-                    st.error(f"⚠️ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.")
+                    st.error(f"⚠️ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**. Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
                 # Se for qualquer outro status ("Sem Perda", etc), exibe a caixa em azul (informativo)
                 else:
-                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**.")
+                    st.info(f"✅ A instalação **{instalacao_input_limpo}** foi encontrada. Possui status **{status}**, com previsão de **{perda_prevista} kW** e perda definitiva de **{perda_definitiva} kW**. Apontamento: **{apontamento}** | Referência: **{referencia}** | Unidade de Leitura: **{unidade_leitura}**")
             else:
                 st.warning(f"A instalação **{instalacao_input_limpo}** não foi encontrada na base de dados.")
         else:
